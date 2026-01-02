@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>초등 교과전담 시간표 시뮬레이터</title>
+    
+    <!-- React & Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
+        body { font-family: 'Pretendard', sans-serif; height: 100vh; overflow: hidden; margin: 0; }
+        .writing-mode-vertical { writing-mode: vertical-rl; text-orientation: mixed; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Table Layout Optimization */
+        .timetable-container { height: calc(100vh - 40px - 24px); width: 100%; }
+        table { width: 100%; height: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+        
+        /* Equal Row Height */
+        tbody tr { height: calc(100% / 30); }
+        .col-fixed { width: 40px; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useRef } = React;
+
+        const Icons = {
+            Users: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            AlertCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            LayoutGrid: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            Book: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6.5 18H20"/></svg>,
+            Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+            Settings2: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>,
+            UserPlus: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="16" x2="22" y1="11" y2="11"/></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+            FileSpreadsheet: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14.5 2 14.5 7.5 20 7.5"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/><line x1="10" x2="10" y1="9" y2="21"/></svg>
+        };
+
+        const COLOR_PALETTES = [
+            { id: 'blue', color: 'bg-blue-50 border-blue-200 text-blue-900', stripe: 'bg-blue-500', dot: 'bg-blue-500' },
+            { id: 'emerald', color: 'bg-emerald-50 border-emerald-200 text-emerald-900', stripe: 'bg-emerald-500', dot: 'bg-emerald-500' },
+            { id: 'rose', color: 'bg-rose-50 border-rose-200 text-rose-900', stripe: 'bg-rose-500', dot: 'bg-rose-500' },
+            { id: 'amber', color: 'bg-amber-50 border-amber-200 text-amber-900', stripe: 'bg-amber-500', dot: 'bg-amber-500' },
+            { id: 'indigo', color: 'bg-indigo-50 border-indigo-200 text-indigo-900', stripe: 'bg-indigo-500', dot: 'bg-indigo-500' },
+            { id: 'violet', color: 'bg-violet-50 border-violet-200 text-violet-900', stripe: 'bg-violet-500', dot: 'bg-violet-500' },
+            { id: 'teal', color: 'bg-teal-50 border-teal-200 text-teal-900', stripe: 'bg-teal-500', dot: 'bg-teal-500' },
+            { id: 'cyan', color: 'bg-cyan-50 border-cyan-200 text-cyan-900', stripe: 'bg-cyan-500', dot: 'bg-cyan-500' },
+            { id: 'orange', color: 'bg-orange-50 border-orange-200 text-orange-900', stripe: 'bg-orange-500', dot: 'bg-orange-500' },
+            { id: 'lime', color: 'bg-lime-50 border-lime-200 text-lime-900', stripe: 'bg-lime-500', dot: 'bg-lime-500' },
+        ];
+
+        // 1, 2학년 제거하고 3~6학년만 남김
+        const INITIAL_GRADES = [
+            { id: 3, name: '3학년', classCount: 4, color: 'bg-yellow-500' },
+            { id: 4, name: '4학년', classCount: 4, color: 'bg-green-500' },
+            { id: 5, name: '5학년', classCount: 4, color: 'bg-blue-500' },
+            { id: 6, name: '6학년', classCount: 4, color: 'bg-purple-500' },
+        ];
+
+        const DAYS = ['월', '화', '수', '목', '금'];
+        const PERIODS = [1, 2, 3, 4, 5, 6];
+
+        const App = () => {
+            const [grades, setGrades] = useState(INITIAL_GRADES);
+            const [viewMode, setViewMode] = useState('all'); 
+            const [teachers, setTeachers] = useState([]); 
+            const [assignments, setAssignments] = useState([]); 
+            const [selectedGradeId, setSelectedGradeId] = useState(3);
+            const [activeTeacher, setActiveTeacher] = useState(null);
+            const [activeSubjectName, setActiveSubjectName] = useState(""); 
+            const [newTeacher, setNewTeacher] = useState({ name: '', subjectConfigs: [{ name: '', hoursPerClass: 6 }], colorIdx: 0 });
+            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+            const fileInputRef = useRef(null);
+
+            const saveAsJSON = () => {
+                const data = { grades, teachers, assignments };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `timetable_data_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.grades) setGrades(data.grades);
+                        if (data.teachers) setTeachers(data.teachers);
+                        if (data.assignments) setAssignments(data.assignments);
+                    } catch (err) { console.error("Load failed", err); }
+                };
+                reader.readAsText(file);
+            };
+
+            const exportToCSV = () => {
+                const activeGrades = grades.filter(g => g.classCount > 0);
+                let csvContent = "\ufeff요일,교시";
+                activeGrades.forEach(g => { for(let i=1; i<=g.classCount; i++) csvContent += `,${g.id}학년 ${i}반`; });
+                csvContent += "\n";
+                DAYS.forEach(day => {
+                    PERIODS.forEach(period => {
+                        csvContent += `${day},${period}`;
+                        activeGrades.forEach(g => {
+                            for(let i=1; i<=g.classCount; i++) {
+                                const as = assignments.find(a => a.gradeId === g.id && a.classNum === i && a.day === day && a.period === period);
+                                const t = as ? teachers.find(tr => tr.id === as.teacherId) : null;
+                                csvContent += as ? `,${as.subjectName}(${t?.name})` : ",";
+                            }
+                        });
+                        csvContent += "\n";
+                    });
+                });
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `timetable_export_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+            };
+
+            const addTeacher = () => {
+                if (!newTeacher.name || newTeacher.subjectConfigs.some(s => !s.name)) return;
+                const selectedPalette = COLOR_PALETTES[newTeacher.colorIdx];
+                setTeachers([...teachers, { 
+                    ...newTeacher, 
+                    id: `t-${Date.now()}`, 
+                    ...selectedPalette
+                }]);
+                setNewTeacher({ name: '', subjectConfigs: [{ name: '', hoursPerClass: 6 }], colorIdx: (newTeacher.colorIdx + 1) % COLOR_PALETTES.length });
+            };
+
+            const updateClassCount = (id, count) => { setGrades(grades.map(g => g.id === id ? { ...g, classCount: Math.max(0, parseInt(count) || 0) } : g)); };
+            const addSubjectInput = () => { setNewTeacher({ ...newTeacher, subjectConfigs: [...newTeacher.subjectConfigs, { name: '', hoursPerClass: 1 }] }); };
+            const updateSubjectInput = (index, field, value) => {
+                const updated = [...newTeacher.subjectConfigs];
+                updated[index][field] = field === 'hoursPerClass' ? (parseInt(value) || 0) : value;
+                setNewTeacher({ ...newTeacher, subjectConfigs: updated });
+            };
+            const removeSubjectInput = (index) => { setNewTeacher({ ...newTeacher, subjectConfigs: newTeacher.subjectConfigs.filter((_, i) => i !== index) }); };
+            
+            const removeTeacher = (id) => {
+                setTeachers(teachers.filter(t => t.id !== id));
+                setAssignments(assignments.filter(a => a.teacherId !== id));
+                if (activeTeacher?.id === id) { setActiveTeacher(null); setActiveSubjectName(""); }
+                setDeleteConfirmId(null);
+            };
+
+            const visibleColumns = useMemo(() => {
+                const activeGrades = grades.filter(g => g.classCount > 0);
+                if (viewMode === 'single') {
+                    const grade = activeGrades.find(g => g.id === selectedGradeId) || activeGrades[0];
+                    if (!grade) return [];
+                    return [{ gradeId: grade.id, gradeName: grade.name, color: grade.color, classes: Array.from({ length: grade.classCount }, (_, i) => i + 1) }];
+                }
+                return activeGrades.map(g => ({ gradeId: g.id, gradeName: g.name, color: g.color, classes: Array.from({ length: g.classCount }, (_, i) => i + 1) }));
+            }, [viewMode, selectedGradeId, grades]);
+
+            const getConflicts = (teacherId, gradeId, classNum, day, period) => {
+                const conflicts = [];
+                const tBusy = assignments.find(a => a.teacherId === teacherId && a.day === day && a.period === period);
+                if (tBusy) conflicts.push(`중복:${tBusy.gradeId}-${tBusy.classNum}`);
+                const cBusy = assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
+                if (cBusy) conflicts.push(`선점:${teachers.find(t => t.id === cBusy.teacherId)?.name || '타교사'}`);
+                return conflicts;
+            };
+
+            const handleCellClick = (gradeId, classNum, day, period) => {
+                if (!activeTeacher) return;
+                const existing = assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
+                
+                // 삭제 로직 (자신이 배정한 경우)
+                if (existing) { 
+                    if (existing.teacherId === activeTeacher.id) setAssignments(assignments.filter(a => a.id !== existing.id)); 
+                    return; 
+                }
+                
+                // 입력 로직
+                if (!activeSubjectName) return;
+
+                // 시수 제한 확인
+                const assignedCount = assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length;
+                const requiredCount = activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0;
+                
+                if (assignedCount >= requiredCount) return; // 꽉 찼으면 입력 금지
+
+                if (getConflicts(activeTeacher.id, gradeId, classNum, day, period).length > 0) return;
+                setAssignments([...assignments, { id: Date.now(), teacherId: activeTeacher.id, subjectName: activeSubjectName, gradeId, classNum, day, period }]);
+            };
+
+            const getAssignment = (gradeId, classNum, day, period) => assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
+
+            return (
+                <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+                    <aside className="w-[280px] bg-white border-r border-slate-200 flex flex-col shadow-xl z-50 overflow-hidden shrink-0">
+                        <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-2 font-black text-xs uppercase tracking-widest leading-none"><Icons.Calendar /> PLANNER</div>
+                            <div className="flex gap-2">
+                                <button onClick={() => fileInputRef.current.click()} title="데이터 로드" className="p-1 hover:bg-slate-700 rounded transition-colors"><Icons.Upload /></button>
+                                <button onClick={saveAsJSON} title="데이터 저장" className="p-1 hover:bg-slate-700 rounded transition-colors"><Icons.Download /></button>
+                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".json" />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin">
+                            {/* 학급 설정 */}
+                            <section className="bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm">
+                                <label className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1 mb-1.5 px-0.5"><Icons.Users /> 학급 수 설정</label>
+                                <div className="grid grid-cols-2 gap-1">
+                                    {grades.map(g => (
+                                        <div key={g.id} className={`flex flex-col p-1 rounded-md border ${selectedGradeId === g.id && viewMode === 'single' ? 'bg-blue-50 border-blue-400' : 'bg-white border-slate-100'}`}>
+                                            <button onClick={() => { setSelectedGradeId(g.id); setViewMode('single'); }} className="text-[8px] font-black text-slate-700 truncate leading-tight">{g.id}학년</button>
+                                            <input type="number" value={g.classCount} onChange={(e) => updateClassCount(g.id, e.target.value)} className="w-full border-none bg-transparent text-[10px] text-center font-bold focus:outline-none p-0" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* 교사 등록 폼 */}
+                            <section className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                                <label className="text-[9px] font-black text-blue-600 uppercase border-b border-blue-50 pb-1 flex items-center gap-1 mb-1.5 px-0.5"><Icons.UserPlus /> 신규 등록</label>
+                                <div className="space-y-1.5 text-xs">
+                                    <div className="flex gap-1">
+                                        <input placeholder="성함(학년교과)" className="flex-1 text-[10px] p-1.5 border rounded-lg outline-none focus:ring-1 focus:ring-blue-500" value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} />
+                                        <button onClick={addTeacher} className="px-3 bg-blue-600 text-white text-[10px] font-black rounded-lg hover:bg-blue-700 active:scale-95 shadow-sm transition-all">등록</button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-10 gap-0.5 p-1 bg-slate-50 rounded-lg">
+                                        {COLOR_PALETTES.map((p, idx) => (
+                                            <button 
+                                                key={idx} 
+                                                onClick={() => setNewTeacher({...newTeacher, colorIdx: idx})}
+                                                className={`w-full aspect-square rounded-full border ${p.dot} ${newTeacher.colorIdx === idx ? 'border-slate-900 scale-110 shadow-sm' : 'border-white'} transition-all`}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    <div className="bg-slate-50 p-1 rounded-lg space-y-1">
+                                        <div className="flex justify-between items-center text-[8px] font-bold text-slate-400 px-1 uppercase tracking-tighter"><span>과목 / 목표 총 시수</span><button onClick={addSubjectInput} className="text-blue-500 hover:scale-110 transition-all"><Icons.Plus /></button></div>
+                                        {newTeacher.subjectConfigs.map((config, idx) => (
+                                            <div key={idx} className="flex items-center gap-1">
+                                                <input placeholder="과목" className="w-[120px] text-[9px] p-1 border rounded bg-white outline-none" value={config.name} onChange={e => updateSubjectInput(idx, 'name', e.target.value)} />
+                                                <input type="number" className="flex-1 min-w-[32px] text-[9px] p-1 border rounded text-center bg-white outline-none font-bold" value={config.hoursPerClass} onChange={e => updateSubjectInput(idx, 'hoursPerClass', e.target.value)} />
+                                                <button onClick={() => removeSubjectInput(idx)} className="text-slate-300 hover:text-red-500 transition-colors p-0.5"><Icons.Trash2 /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* 교사 목록 */}
+                            <section className="space-y-1.5 pb-10 text-xs">
+                                <label className="text-[9px] font-black text-slate-500 uppercase px-0.5 flex items-center gap-1 mb-1"><Icons.LayoutGrid /> 교사 목록 (배정 현황)</label>
+                                {teachers.map(t => {
+                                    const isActive = activeTeacher?.id === t.id;
+                                    const isConfirming = deleteConfirmId === t.id;
+                                    const isAllComplete = t.subjectConfigs.every(config => 
+                                        assignments.filter(a => a.teacherId === t.id && a.subjectName === config.name).length >= config.hoursPerClass
+                                    );
+
+                                    return (
+                                        <div key={t.id} className={`relative p-2 rounded-lg border transition-all ${isActive ? 'bg-white shadow-lg ring-1 ring-blue-500 z-10' : 'bg-white border-slate-100 hover:border-slate-200'} ${isAllComplete ? 'bg-emerald-50/30' : ''}`}>
+                                            <div onClick={() => { if(isActive) { setActiveTeacher(null); setActiveSubjectName(""); } else { setActiveTeacher(t); setActiveSubjectName(t.subjectConfigs[0]?.name || ""); } }} className="cursor-pointer pr-6">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center gap-1.5 overflow-hidden">
+                                                        <div className={`w-2 h-2 rounded-full ${t.dot} shadow-sm shrink-0`}></div>
+                                                        <h3 className="text-[10px] font-black text-slate-800 truncate leading-none">{t.name}</h3>
+                                                    </div>
+                                                    {isAllComplete && <span className="text-[8px] bg-emerald-500 text-white px-1 py-0.5 rounded font-black uppercase leading-none scale-90">Complete</span>}
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {t.subjectConfigs.map((config, sIdx) => {
+                                                        const assigned = assignments.filter(a => a.teacherId === t.id && a.subjectName === config.name).length;
+                                                        const required = config.hoursPerClass;
+                                                        const isSubActive = isActive && activeSubjectName === config.name;
+                                                        const isComplete = assigned >= required;
+
+                                                        return (
+                                                            <div key={sIdx} onClick={(e) => { if(isActive) { e.stopPropagation(); setActiveSubjectName(config.name); } }} className={`px-2 py-1 rounded border transition-all ${isSubActive ? 'bg-blue-600 text-white border-transparent' : (isComplete ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-slate-50 text-slate-500 border-slate-100')}`}>
+                                                                <div className="flex justify-between items-center text-[9px] font-black mb-0.5 uppercase tracking-tighter leading-none">
+                                                                    <div className="flex items-center gap-1 truncate pr-1">
+                                                                        {isComplete && <Icons.Check />}
+                                                                        <span className="truncate leading-none">{config.name}</span>
+                                                                    </div>
+                                                                    <span className="leading-none whitespace-nowrap">{assigned}/{required}h</span>
+                                                                </div>
+                                                                {required > 0 && (
+                                                                    <div className={`w-full h-0.5 rounded-full overflow-hidden mt-1 ${isSubActive ? 'bg-blue-400' : (isComplete ? 'bg-emerald-200' : 'bg-slate-200')}`}>
+                                                                        <div className={`h-full transition-all duration-700 ${isSubActive ? 'bg-white' : (isComplete ? 'bg-emerald-500' : t.stripe)}`} style={{ width: `${Math.min(100, (assigned / required) * 100)}%` }}></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div className="absolute top-2 right-2">
+                                                {!isConfirming ? (
+                                                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t.id); }} className="p-1 text-slate-300 hover:text-red-500 transition-all"><Icons.Trash2 /></button>
+                                                ) : (
+                                                    <div className="flex gap-1 animate-in fade-in slide-in-from-right-1">
+                                                        <button onClick={(e) => { e.stopPropagation(); removeTeacher(t.id); }} className="p-1 bg-red-500 text-white rounded shadow-sm hover:bg-red-600 transition-colors"><Icons.Check /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="p-1 bg-slate-200 text-slate-600 rounded shadow-sm hover:bg-slate-300 transition-colors"><Icons.X /></button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {teachers.length === 0 && (
+                                    <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed px-4">
+                                            상단 '신규 등록'에서<br/>교사를 먼저 추가하세요.
+                                        </p>
+                                    </div>
+                                )}
+                            </section>
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 flex flex-col overflow-hidden bg-white">
+                        <header className="h-10 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0">
+                            <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest leading-none">
+                                <Icons.LayoutGrid /> {viewMode === 'single' ? `${selectedGradeId}학년 시간표` : '통합 시간표 사전 배치판'}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {activeTeacher && (
+                                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-black shadow-md border animate-pulse ${
+                                        (assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length >= (activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0))
+                                        ? 'bg-emerald-600 text-white border-emerald-500' 
+                                        : 'bg-blue-600 text-white border-white/20'
+                                    }`}>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-sm"></div>
+                                        {activeTeacher.name} {activeSubjectName} 배치 중
+                                        {(assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length >= (activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0)) && " (완료)"}
+                                    </div>
+                                )}
+                                <div className="flex gap-1 ml-2 border-l border-slate-200 pl-2">
+                                    <button onClick={exportToCSV} className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white rounded text-[9px] font-black shadow-sm active:scale-95 transition-all leading-none"><Icons.FileSpreadsheet /> EXCEL</button>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="flex-1 timetable-container">
+                            <table className="w-full h-full table-fixed">
+                                <thead>
+                                    <tr className="bg-slate-100 h-10">
+                                        <th className="col-fixed border-b border-r border-slate-200 text-[8px] font-black text-slate-400 uppercase sticky left-0 z-30 bg-slate-100 leading-none">요일</th>
+                                        <th className="col-fixed border-b border-r border-slate-200 text-[8px] font-black text-slate-400 uppercase sticky left-10 z-30 bg-slate-100 text-center leading-none">교시</th>
+                                        {visibleColumns.map(gCol => (
+                                            <th key={gCol.gradeId} colSpan={gCol.classes.length} className="border-b border-r-2 border-slate-300 text-center px-0.5">
+                                                <div className="flex items-center justify-center gap-0.5 overflow-hidden">
+                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${gCol.color}`}></div>
+                                                    <span className="text-[9px] font-black text-slate-800 uppercase truncate tracking-tighter leading-none">{gCol.gradeName}</span>
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                    <tr className="bg-white h-5">
+                                        <th className="sticky left-0 z-30 bg-white border-b border-r border-slate-200"></th>
+                                        <th className="sticky left-10 z-30 bg-white border-b border-r border-slate-200"></th>
+                                        {visibleColumns.map(gCol => gCol.classes.map((cNum, idx) => (
+                                            <th key={`${gCol.gradeId}-${cNum}`} className={`border-b text-[7px] font-black text-slate-400 leading-none ${idx === gCol.classes.length - 1 ? 'border-r-2 border-slate-300' : 'border-r border-slate-200'}`}>{cNum}반</th>
+                                        )))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {DAYS.map((day) => (
+                                        <React.Fragment key={day}>
+                                            {PERIODS.map((period, pIdx) => (
+                                                <tr key={`${day}-${period}`} className="group transition-colors border-b border-slate-100">
+                                                    {pIdx === 0 && <td rowSpan={6} className="sticky left-0 z-10 bg-slate-50 border-r border-slate-200 text-center font-black text-slate-600 text-[8px] uppercase tracking-tighter shadow-sm leading-none"><div className="writing-mode-vertical py-1 mx-auto leading-none">{day}</div></td>}
+                                                    <td className="sticky left-10 z-10 bg-slate-50 border-r border-slate-200 text-center text-[9px] font-black text-slate-400 italic bg-slate-50/50 shadow-sm leading-none">{period}</td>
+                                                    {visibleColumns.map(gCol => gCol.classes.map((classNum, idx) => {
+                                                        const as = getAssignment(gCol.gradeId, classNum, day, period);
+                                                        const t = as ? teachers.find(tr => tr.id === as.teacherId) : null;
+                                                        const conflicts = activeTeacher && !as ? getConflicts(activeTeacher.id, gCol.gradeId, classNum, day, period) : [];
+                                                        const isOccupiedByOther = as && activeTeacher && as.teacherId !== activeTeacher.id;
+                                                        
+                                                        const activeSubjectReq = activeTeacher?.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0;
+                                                        const activeSubjectAssigned = activeTeacher ? assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length : 0;
+                                                        const isSubjectFull = activeTeacher && activeSubjectAssigned >= activeSubjectReq;
+
+                                                        return (
+                                                            <td key={`${gCol.gradeId}-${classNum}`} onClick={() => handleCellClick(gCol.gradeId, classNum, day, period)} className={`p-px relative group/cell transition-all ${idx === gCol.classes.length - 1 ? 'border-r-2 border-slate-300' : 'border-r border-slate-100'} ${isOccupiedByOther ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${conflicts.length > 0 ? 'bg-red-50' : 'hover:bg-blue-50/50'}`}>
+                                                                {as ? (
+                                                                    <div className={`h-full w-full rounded-sm border-l shadow-sm flex flex-col justify-center overflow-hidden leading-tight ${isOccupiedByOther ? 'grayscale opacity-30 scale-95' : 'group-hover/cell:scale-105 group-hover/cell:shadow-md'} ${t?.color || 'bg-slate-100 border-slate-300'}`}>
+                                                                        <div className="flex justify-between items-center px-0.5 overflow-hidden">
+                                                                            <span className="text-[6px] font-black opacity-80 uppercase tracking-tighter truncate leading-none">{as.subjectName}</span>
+                                                                            {!isOccupiedByOther && activeTeacher ? <div className="text-slate-400 shrink-0 hover:text-red-500 transition-colors"><Icons.Trash2 /></div> : (isOccupiedByOther && <div className="shrink-0 scale-75"><Icons.Lock /></div>)}
+                                                                        </div>
+                                                                        <div className="font-black text-slate-900 text-[8px] px-0.5 truncate leading-none mt-0.5">{t?.name}</div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="h-full w-full flex items-center justify-center leading-none">
+                                                                        {activeTeacher && conflicts.length === 0 && !isSubjectFull && <Icons.Plus />}
+                                                                        {conflicts.length > 0 && <Icons.AlertCircle />}
+                                                                        {isSubjectFull && activeTeacher && !as && <div className="text-[6px] font-black text-slate-300 scale-75 leading-none">FULL</div>}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    }))}
+                                                </tr>
+                                            ))}
+                                            <tr className="h-0.5 bg-slate-400 border-b border-slate-400"><td colSpan={visibleColumns.reduce((acc, g) => acc + g.classes.length, 2)}></td></tr>
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
