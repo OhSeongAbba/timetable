@@ -3,444 +3,668 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>초등 교과전담 시간표 시뮬레이터</title>
-    
-    <!-- React & Babel CDN -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS CDN -->
+    <title>2026학년도 교과전담 시간표 생성기 (스마트 알고리즘 탑재)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
-        body { font-family: 'Pretendard', sans-serif; height: 100vh; overflow: hidden; margin: 0; }
-        .writing-mode-vertical { writing-mode: vertical-rl; text-orientation: mixed; }
-        
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #f8fafc; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* Table Layout Optimization */
-        .timetable-container { height: calc(100vh - 40px - 24px); width: 100%; }
-        table { width: 100%; height: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
-        
-        /* Equal Row Height */
-        tbody tr { height: calc(100% / 30); }
-        .col-fixed { width: 40px; }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f3f4f6; }
+        .timetable-cell { height: 60px; font-size: 0.85rem; }
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .tab-inactive { color: #6b7280; }
+        .edit-input { width: 100%; border: 1px solid #e5e7eb; padding: 4px 8px; border-radius: 4px; }
+        .edit-input:focus { border-color: #2563eb; outline: none; }
+        .block-grid-cell { cursor: pointer; transition: all 0.2s; }
+        .block-grid-cell:hover { background-color: #fee2e2; }
+        .block-grid-cell.blocked { background-color: #ef4444; color: white; }
     </style>
 </head>
-<body class="bg-slate-50">
-    <div id="root" class="h-full"></div>
+<body>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        const Icons = {
-            Users: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-            Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
-            AlertCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
-            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>,
-            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
-            LayoutGrid: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>,
-            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
-            Book: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6.5 18H20"/></svg>,
-            Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
-            Settings2: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>,
-            UserPlus: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="16" x2="22" y1="11" y2="11"/></svg>,
-            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
-            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
-            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
-            FileSpreadsheet: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14.5 2 14.5 7.5 20 7.5"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/><line x1="10" x2="10" y1="9" y2="21"/></svg>
+        // --- 초기 데이터 ---
+        const INITIAL_TEACHERS = [
+            { id: 1, name: '', subject: '', grade: '', classes: '', hoursPerClass: '', room: '', color: 'bg-blue-100' }
+        ];
+
+        const INITIAL_GRADE_LIMITS = {
+            3: [5, 6, 5, 5, 5],
+            4: [5, 6, 5, 5, 5],
+            5: [6, 6, 5, 6, 6],
+            6: [6, 6, 5, 6, 6]
         };
-
-        const COLOR_PALETTES = [
-            { id: 'blue', color: 'bg-blue-50 border-blue-200 text-blue-900', stripe: 'bg-blue-500', dot: 'bg-blue-500' },
-            { id: 'emerald', color: 'bg-emerald-50 border-emerald-200 text-emerald-900', stripe: 'bg-emerald-500', dot: 'bg-emerald-500' },
-            { id: 'rose', color: 'bg-rose-50 border-rose-200 text-rose-900', stripe: 'bg-rose-500', dot: 'bg-rose-500' },
-            { id: 'amber', color: 'bg-amber-50 border-amber-200 text-amber-900', stripe: 'bg-amber-500', dot: 'bg-amber-500' },
-            { id: 'indigo', color: 'bg-indigo-50 border-indigo-200 text-indigo-900', stripe: 'bg-indigo-500', dot: 'bg-indigo-500' },
-            { id: 'violet', color: 'bg-violet-50 border-violet-200 text-violet-900', stripe: 'bg-violet-500', dot: 'bg-violet-500' },
-            { id: 'teal', color: 'bg-teal-50 border-teal-200 text-teal-900', stripe: 'bg-teal-500', dot: 'bg-teal-500' },
-            { id: 'cyan', color: 'bg-cyan-50 border-cyan-200 text-cyan-900', stripe: 'bg-cyan-500', dot: 'bg-cyan-500' },
-            { id: 'orange', color: 'bg-orange-50 border-orange-200 text-orange-900', stripe: 'bg-orange-500', dot: 'bg-orange-500' },
-            { id: 'lime', color: 'bg-lime-50 border-lime-200 text-lime-900', stripe: 'bg-lime-500', dot: 'bg-lime-500' },
-        ];
-
-        // 1, 2학년 제거하고 3~6학년만 남김
-        const INITIAL_GRADES = [
-            { id: 3, name: '3학년', classCount: 4, color: 'bg-yellow-500' },
-            { id: 4, name: '4학년', classCount: 4, color: 'bg-green-500' },
-            { id: 5, name: '5학년', classCount: 4, color: 'bg-blue-500' },
-            { id: 6, name: '6학년', classCount: 4, color: 'bg-purple-500' },
-        ];
-
+        
         const DAYS = ['월', '화', '수', '목', '금'];
         const PERIODS = [1, 2, 3, 4, 5, 6];
 
-        const App = () => {
-            const [grades, setGrades] = useState(INITIAL_GRADES);
-            const [viewMode, setViewMode] = useState('all'); 
-            const [teachers, setTeachers] = useState([]); 
-            const [assignments, setAssignments] = useState([]); 
-            const [selectedGradeId, setSelectedGradeId] = useState(3);
-            const [activeTeacher, setActiveTeacher] = useState(null);
-            const [activeSubjectName, setActiveSubjectName] = useState(""); 
-            const [newTeacher, setNewTeacher] = useState({ name: '', subjectConfigs: [{ name: '', hoursPerClass: 6 }], colorIdx: 0 });
-            const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-            const fileInputRef = useRef(null);
+        const COLOR_OPTIONS = [
+            { value: 'bg-blue-100', label: '파랑' },
+            { value: 'bg-green-100', label: '초록' },
+            { value: 'bg-yellow-100', label: '노랑' },
+            { value: 'bg-purple-100', label: '보라' },
+            { value: 'bg-red-100', label: '빨강' },
+            { value: 'bg-indigo-100', label: '남색' },
+            { value: 'bg-pink-100', label: '분홍' },
+            { value: 'bg-gray-100', label: '회색' },
+            { value: 'bg-orange-100', label: '주황' },
+            { value: 'bg-teal-100', label: '청록' },
+        ];
 
-            const saveAsJSON = () => {
-                const data = { grades, teachers, assignments };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `timetable_data_${new Date().toISOString().split('T')[0]}.json`;
-                link.click();
-            };
+        function App() {
+            const [teachers, setTeachers] = useState(INITIAL_TEACHERS);
+            const [gradeLimits, setGradeLimits] = useState(INITIAL_GRADE_LIMITS);
+            const [blockedSlots, setBlockedSlots] = useState({}); 
+            const [schedule, setSchedule] = useState({});
+            
+            const [viewMode, setViewMode] = useState('teacher'); 
+            const [activeTab, setActiveTab] = useState('settings'); 
+            const [activeBlockGrade, setActiveBlockGrade] = useState(6); 
 
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        if (data.grades) setGrades(data.grades);
-                        if (data.teachers) setTeachers(data.teachers);
-                        if (data.assignments) setAssignments(data.assignments);
-                    } catch (err) { console.error("Load failed", err); }
-                };
-                reader.readAsText(file);
-            };
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [generationStatus, setGenerationStatus] = useState('');
+            const [logMessage, setLogMessage] = useState([]);
 
-            const exportToCSV = () => {
-                const activeGrades = grades.filter(g => g.classCount > 0);
-                let csvContent = "\ufeff요일,교시";
-                activeGrades.forEach(g => { for(let i=1; i<=g.classCount; i++) csvContent += `,${g.id}학년 ${i}반`; });
-                csvContent += "\n";
-                DAYS.forEach(day => {
-                    PERIODS.forEach(period => {
-                        csvContent += `${day},${period}`;
-                        activeGrades.forEach(g => {
-                            for(let i=1; i<=g.classCount; i++) {
-                                const as = assignments.find(a => a.gradeId === g.id && a.classNum === i && a.day === day && a.period === period);
-                                const t = as ? teachers.find(tr => tr.id === as.teacherId) : null;
-                                csvContent += as ? `,${as.subjectName}(${t?.name})` : ",";
-                            }
-                        });
-                        csvContent += "\n";
-                    });
-                });
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `timetable_export_${new Date().toISOString().split('T')[0]}.csv`;
-                link.click();
+            // --- 데이터 핸들러 ---
+            const handleTeacherChange = (id, field, value) => {
+                setTeachers(prev => prev.map(t => {
+                    if (t.id !== id) return t;
+                    let newValue = value;
+                    if (field === 'grade' || field === 'hoursPerClass') {
+                        if (value === '') newValue = '';
+                        else newValue = parseInt(value) || 0;
+                    } 
+                    return { ...t, [field]: newValue };
+                }));
             };
 
             const addTeacher = () => {
-                if (!newTeacher.name || newTeacher.subjectConfigs.some(s => !s.name)) return;
-                const selectedPalette = COLOR_PALETTES[newTeacher.colorIdx];
-                setTeachers([...teachers, { 
-                    ...newTeacher, 
-                    id: `t-${Date.now()}`, 
-                    ...selectedPalette
+                const newId = teachers.length > 0 ? Math.max(...teachers.map(t => t.id)) + 1 : 1;
+                setTeachers([...teachers, {
+                    id: newId, name: '', subject: '', grade: '', classes: '', hoursPerClass: '', room: '', color: 'bg-gray-100'
                 }]);
-                setNewTeacher({ name: '', subjectConfigs: [{ name: '', hoursPerClass: 6 }], colorIdx: (newTeacher.colorIdx + 1) % COLOR_PALETTES.length });
             };
 
-            const updateClassCount = (id, count) => { setGrades(grades.map(g => g.id === id ? { ...g, classCount: Math.max(0, parseInt(count) || 0) } : g)); };
-            const addSubjectInput = () => { setNewTeacher({ ...newTeacher, subjectConfigs: [...newTeacher.subjectConfigs, { name: '', hoursPerClass: 1 }] }); };
-            const updateSubjectInput = (index, field, value) => {
-                const updated = [...newTeacher.subjectConfigs];
-                updated[index][field] = field === 'hoursPerClass' ? (parseInt(value) || 0) : value;
-                setNewTeacher({ ...newTeacher, subjectConfigs: updated });
-            };
-            const removeSubjectInput = (index) => { setNewTeacher({ ...newTeacher, subjectConfigs: newTeacher.subjectConfigs.filter((_, i) => i !== index) }); };
-            
             const removeTeacher = (id) => {
-                setTeachers(teachers.filter(t => t.id !== id));
-                setAssignments(assignments.filter(a => a.teacherId !== id));
-                if (activeTeacher?.id === id) { setActiveTeacher(null); setActiveSubjectName(""); }
-                setDeleteConfirmId(null);
+                if (confirm('정말 삭제하시겠습니까?')) setTeachers(prev => prev.filter(t => t.id !== id));
             };
 
-            const visibleColumns = useMemo(() => {
-                const activeGrades = grades.filter(g => g.classCount > 0);
-                if (viewMode === 'single') {
-                    const grade = activeGrades.find(g => g.id === selectedGradeId) || activeGrades[0];
-                    if (!grade) return [];
-                    return [{ gradeId: grade.id, gradeName: grade.name, color: grade.color, classes: Array.from({ length: grade.classCount }, (_, i) => i + 1) }];
+            const handleGradeLimitChange = (grade, dayIdx, val) => {
+                setGradeLimits(prev => {
+                    const newLimits = [...prev[grade]];
+                    newLimits[dayIdx] = parseInt(val) || 0;
+                    return { ...prev, [grade]: newLimits };
+                });
+            };
+
+            const toggleBlockedSlot = (grade, dayIdx, period) => {
+                const key = `${grade}-${dayIdx}-${period}`;
+                setBlockedSlots(prev => {
+                    const next = { ...prev };
+                    if (next[key]) delete next[key];
+                    else next[key] = true;
+                    return next;
+                });
+            };
+
+            // ==========================================
+            // [핵심] 알고리즘 로직 (스마트 스코어링 방식)
+            // ==========================================
+
+            // 1. 유효성 검사 (Hard Constraints)
+            const isSlotValid = (slot, task, currentSchedule, checkDailyDup = true) => {
+                const { day, period } = slot;
+                const keyTeacher = `T-${task.teacherId}-${day}-${period}`;
+                const keyClass = `C-${task.grade}-${task.classNum}-${day}-${period}`;
+                const keyRoom = task.room ? `R-${task.room}-${day}-${period}` : null;
+
+                // A. 리소스 점유 확인 (교사, 학급, 특별실)
+                if (currentSchedule[keyTeacher]) return false;
+                if (currentSchedule[keyClass]) return false;
+                if (keyRoom && currentSchedule[keyRoom]) return false;
+
+                // B. 1일 1과목 제한 (같은 반이 같은 선생님 수업을 하루에 2번 못하게 함)
+                if (checkDailyDup) {
+                    let alreadyHasClass = false;
+                    for (let p of PERIODS) {
+                        const checkKey = `C-${task.grade}-${task.classNum}-${day}-${p}`;
+                        const existingTask = currentSchedule[checkKey];
+                        if (existingTask && existingTask.teacherId === task.teacherId) {
+                            alreadyHasClass = true;
+                            break;
+                        }
+                    }
+                    if (alreadyHasClass) return false;
                 }
-                return activeGrades.map(g => ({ gradeId: g.id, gradeName: g.name, color: g.color, classes: Array.from({ length: g.classCount }, (_, i) => i + 1) }));
-            }, [viewMode, selectedGradeId, grades]);
 
-            const getConflicts = (teacherId, gradeId, classNum, day, period) => {
-                const conflicts = [];
-                const tBusy = assignments.find(a => a.teacherId === teacherId && a.day === day && a.period === period);
-                if (tBusy) conflicts.push(`중복:${tBusy.gradeId}-${tBusy.classNum}`);
-                const cBusy = assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
-                if (cBusy) conflicts.push(`선점:${teachers.find(t => t.id === cBusy.teacherId)?.name || '타교사'}`);
-                return conflicts;
+                return true;
             };
 
-            const handleCellClick = (gradeId, classNum, day, period) => {
-                if (!activeTeacher) return;
-                const existing = assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
+            // 2. 점수 계산 (Soft Constraints)
+            const calculateSlotScore = (slot, task, currentSchedule) => {
+                let score = 0;
+                const { day, period } = slot;
+
+                // [규칙 1] 공강(퐁당퐁당) 최소화
+                // 해당 교사의 해당 요일 스케줄을 확인
+                let teacherPeriods = [];
+                for (let p of PERIODS) {
+                    if (p === period) {
+                        teacherPeriods.push(p);
+                        continue;
+                    }
+                    const keyT = `T-${task.teacherId}-${day}-${p}`;
+                    if (currentSchedule[keyT]) teacherPeriods.push(p);
+                }
+                teacherPeriods.sort((a,b) => a-b);
                 
-                // 삭제 로직 (자신이 배정한 경우)
-                if (existing) { 
-                    if (existing.teacherId === activeTeacher.id) setAssignments(assignments.filter(a => a.id !== existing.id)); 
-                    return; 
+                if (teacherPeriods.length > 0) {
+                    const minP = Math.min(...teacherPeriods);
+                    const maxP = Math.max(...teacherPeriods);
+                    const duration = maxP - minP + 1;
+                    const gaps = duration - teacherPeriods.length;
+                    
+                    // 공강(gap)이 생길수록 큰 감점 (-50점)
+                    score -= (gaps * 50);
+
+                    // 연속 수업(붙여서 수업)이면 가산점 (+10점)
+                    // 현재 배치하려는 교시가 기존 교시들과 붙어있는지 확인
+                    const isAdjacent = teacherPeriods.some(p => Math.abs(p - period) === 1);
+                    if (isAdjacent) score += 10;
+                }
+
+                // [규칙 2] 학년 진도 그룹화 (Grade Cohesion)
+                // 같은 학년의 다른 반들이 이 요일에 수업이 있는지 확인
+                let sameGradeCountOnDay = 0;
+                for (let c = 1; c <= 12; c++) { // 임의의 최대 반 개수
+                    if (c === task.classNum) continue;
+                    // 해당 요일, 해당 학년, 해당 선생님의 수업이 있는지 체크
+                    for (let p of PERIODS) {
+                         // 키 생성 규칙 주의: 여기서는 스케줄을 순회하는게 비효율적이므로 생략하거나
+                         // 별도의 인덱싱이 필요하나, 간략히 룸/선생님 키로 유추
+                         const keyT = `T-${task.teacherId}-${day}-${p}`;
+                         const existingEntry = currentSchedule[keyT];
+                         if (existingEntry && existingEntry.grade === task.grade) {
+                             sameGradeCountOnDay++;
+                             break; // 해당 반이 이 요일에 이미 있으면 카운트
+                         }
+                    }
                 }
                 
-                // 입력 로직
-                if (!activeSubjectName) return;
+                // 같은 학년 수업이 있는 요일에 배치하면 +20점 (진도 맞추기 유리)
+                if (sameGradeCountOnDay > 0) score += 20;
 
-                // 시수 제한 확인
-                const assignedCount = assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length;
-                const requiredCount = activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0;
-                
-                if (assignedCount >= requiredCount) return; // 꽉 찼으면 입력 금지
+                // [규칙 3] 요일별 균형 (너무 한 요일에 몰리지 않게)
+                // (생략 가능하나, 구현하면 좋음)
 
-                if (getConflicts(activeTeacher.id, gradeId, classNum, day, period).length > 0) return;
-                setAssignments([...assignments, { id: Date.now(), teacherId: activeTeacher.id, subjectName: activeSubjectName, gradeId, classNum, day, period }]);
+                return score;
             };
 
-            const getAssignment = (gradeId, classNum, day, period) => assignments.find(a => a.gradeId === gradeId && a.classNum === classNum && a.day === day && a.period === period);
+            const generateTimetable = async () => {
+                // 1. 데이터 검증
+                const validTeachers = teachers.filter(t => t.name && t.grade && t.hoursPerClass);
+                if (validTeachers.length === 0) {
+                    alert("최소한 한 명 이상의 교사 정보를 올바르게 입력해주세요.");
+                    return;
+                }
+
+                setIsGenerating(true);
+                setGenerationStatus('데이터 분석 중...');
+                setLogMessage([]);
+                
+                await new Promise(r => setTimeout(r, 50)); // UI 렌더링 양보
+
+                // 2. Task 생성
+                let tasks = [];
+                validTeachers.forEach(t => {
+                    const classArray = String(t.classes).split(',')
+                        .map(s => s.trim())
+                        .filter(s => s !== '' && !isNaN(s))
+                        .map(Number)
+                        .sort((a,b) => a-b);
+
+                    classArray.forEach(c => {
+                        for(let i=0; i<t.hoursPerClass; i++) {
+                            tasks.push({
+                                uid: `${t.id}-${c}-${i}`, // 고유 ID
+                                teacherId: t.id, 
+                                teacherName: t.name, 
+                                subject: t.subject,
+                                grade: parseInt(t.grade), 
+                                classNum: c, 
+                                room: t.room, 
+                                color: t.color,
+                                // 우선순위: 룸 사용 과목 > 6학년 > 기타 (일반적인 학교 규칙)
+                                priority: (t.room ? 200 : 0) + (t.grade === 6 ? 100 : 0) + (Math.random() * 10)
+                            });
+                        }
+                    });
+                });
+
+                // 우선순위 정렬 (어려운 배정부터)
+                tasks.sort((a, b) => b.priority - a.priority);
+
+                let bestSchedule = null;
+                let minConflicts = Infinity;
+                let bestScore = -Infinity;
+
+                // 3. 반복 시도 (Retry Logic)
+                const MAX_ATTEMPTS = 50; // 스코어링 방식이라 횟수를 줄여도 퀄리티가 좋음
+
+                for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                    let tempSchedule = {};
+                    let conflictCount = 0;
+                    let currentTasks = [...tasks]; 
+                    
+                    // 매 시도마다 태스크 순서를 약간 섞어줌 (Local Optima 탈출)
+                    // 단, 중요도가 높은 그룹 내에서만 섞이도록
+                    if (attempt > 0) {
+                         currentTasks.sort((a, b) => (b.priority + Math.random() * 50) - (a.priority + Math.random() * 50));
+                    }
+
+                    for (let task of currentTasks) {
+                        let bestSlot = null;
+                        let maxScore = -Infinity;
+                        let possibleSlots = [];
+
+                        // 가능한 모든 슬롯 탐색
+                        DAYS.forEach((d, dIdx) => {
+                            PERIODS.forEach(p => {
+                                // A. 기본 한계 체크
+                                const limits = gradeLimits[task.grade] || [6,6,6,6,6];
+                                if (p > limits[dIdx]) return;
+                                if (blockedSlots[`${task.grade}-${dIdx}-${p}`]) return;
+
+                                const slot = { day: dIdx, period: p };
+
+                                // B. Hard Constraint 체크
+                                if (isSlotValid(slot, task, tempSchedule)) {
+                                    possibleSlots.push(slot);
+                                }
+                            });
+                        });
+
+                        // 가능한 슬롯 중 점수가 가장 높은 슬롯 선택
+                        if (possibleSlots.length > 0) {
+                            // 무작위성을 약간 섞어서 다양한 시도 유도
+                            possibleSlots.forEach(slot => {
+                                const score = calculateSlotScore(slot, task, tempSchedule);
+                                // 동점일 경우 랜덤 선택
+                                const noise = Math.random() * 5; 
+                                if (score + noise > maxScore) {
+                                    maxScore = score + noise;
+                                    bestSlot = slot;
+                                }
+                            });
+                        }
+
+                        if (bestSlot) {
+                            const { day, period } = bestSlot;
+                            const entry = { ...task, day, period };
+                            tempSchedule[`T-${task.teacherId}-${day}-${period}`] = entry;
+                            tempSchedule[`C-${task.grade}-${task.classNum}-${day}-${period}`] = entry;
+                            if (task.room) tempSchedule[`R-${task.room}-${day}-${period}`] = entry;
+                        } else {
+                            conflictCount++;
+                        }
+                    }
+
+                    // 이번 시도의 품질 평가
+                    if (conflictCount < minConflicts) {
+                        minConflicts = conflictCount;
+                        bestSchedule = tempSchedule;
+                        // 로그 기록
+                        setLogMessage(prev => [`시도 ${attempt + 1}: 미배정 ${conflictCount}건 (갱신)`].slice(-5));
+                    }
+                    
+                    // 완벽한 시간표를 찾으면 조기 종료
+                    if (conflictCount === 0) break;
+                }
+
+                setSchedule(bestSchedule);
+                setGenerationStatus(minConflicts === 0 
+                    ? '✨ 완벽한 시간표 생성 성공!' 
+                    : `⚠️ 생성 완료 (미배정 수업: ${minConflicts}건 - 조건을 완화해보세요)`);
+                setIsGenerating(false);
+                setActiveTab('result');
+            };
+
+            // --- 렌더링 헬퍼 ---
+            const getScheduleContent = (dayIdx, period, filterType, filterValue) => {
+                if (!schedule) return null;
+                const day = dayIdx; 
+                let key;
+                if (filterType === 'teacher') key = `T-${filterValue}-${day}-${period}`;
+                else {
+                    const [g, c] = filterValue.split('-');
+                    key = `C-${g}-${c}-${day}-${period}`;
+                }
+                const data = schedule[key];
+                if (!data) return null;
+
+                return (
+                    <div className={`p-1 rounded text-xs text-center h-full flex flex-col justify-center items-center ${data.color} shadow-sm transition-all hover:shadow-md cursor-pointer hover:scale-105`}>
+                        {filterType === 'teacher' ? (
+                            <>
+                                <span className="font-bold text-gray-800">{data.grade}-{data.classNum}</span>
+                                <span className="text-gray-600 scale-90">{data.room}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="font-bold text-gray-800">{data.subject}</span>
+                                <span className="text-gray-600 scale-90">{data.teacherName}</span>
+                            </>
+                        )}
+                    </div>
+                );
+            };
+
+            const uniqueTeachers = useMemo(() => {
+                // 중복 제거 및 정렬
+                const map = new Map();
+                teachers.forEach(t => {
+                    if(t.name) map.set(t.id, t);
+                });
+                return Array.from(map.values());
+            }, [teachers]);
+
+            const classList = useMemo(() => {
+                let list = [];
+                [3, 4, 5, 6].forEach(g => {
+                    const maxClass = Math.max(...teachers.filter(t => t.grade == g).flatMap(t => { 
+                        return String(t.classes).split(',')
+                            .map(s => s.trim())
+                            .filter(s => s !== '' && !isNaN(s))
+                            .map(Number);
+                    }), 0);
+                    if (maxClass > 0) {
+                        for(let c=1; c<=maxClass; c++) list.push(`${g}-${c}`);
+                    }
+                });
+                return list;
+            }, [teachers]);
 
             return (
-                <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
-                    <aside className="w-[280px] bg-white border-r border-slate-200 flex flex-col shadow-xl z-50 overflow-hidden shrink-0">
-                        <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-2 font-black text-xs uppercase tracking-widest leading-none"><Icons.Calendar /> PLANNER</div>
-                            <div className="flex gap-2">
-                                <button onClick={() => fileInputRef.current.click()} title="데이터 로드" className="p-1 hover:bg-slate-700 rounded transition-colors"><Icons.Upload /></button>
-                                <button onClick={saveAsJSON} title="데이터 저장" className="p-1 hover:bg-slate-700 rounded transition-colors"><Icons.Download /></button>
-                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".json" />
+                <div className="max-w-7xl mx-auto p-4 pb-20">
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div className="mb-4 md:mb-0">
+                            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <i className="fas fa-calendar-check text-blue-600"></i>
+                                2026학년도 교과전담 시간표 생성기
+                            </h1>
+                            <p className="text-sm text-gray-500 mt-1">
+                                공강 최소화, 진도 맞춤, 1일 1과목 제한 규칙이 적용된 스마트 알고리즘
+                            </p>
+                        </div>
+                        <button 
+                            onClick={generateTimetable}
+                            disabled={isGenerating}
+                            className={`px-8 py-3 rounded-xl text-white font-bold shadow-lg transform transition-all active:scale-95 flex items-center gap-2
+                                ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'}`}
+                        >
+                            {isGenerating ? <><i className="fas fa-spinner fa-spin"></i> 생성 중...</> : <><i className="fas fa-magic"></i> 시간표 생성하기</>}
+                        </button>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex mb-6 bg-white rounded-lg p-1 shadow-sm border border-gray-100 inline-flex">
+                        <button 
+                            className={`px-6 py-2 rounded-md transition-colors ${activeTab === 'settings' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}
+                            onClick={() => setActiveTab('settings')}
+                        >
+                            <i className="fas fa-cog mr-2"></i>기본 설정
+                        </button>
+                        <button 
+                            className={`px-6 py-2 rounded-md transition-colors ${activeTab === 'input' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}
+                            onClick={() => setActiveTab('input')}
+                        >
+                            <i className="fas fa-user-edit mr-2"></i>교사 입력
+                        </button>
+                        <button 
+                            className={`px-6 py-2 rounded-md transition-colors ${activeTab === 'result' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}
+                            onClick={() => setActiveTab('result')}
+                        >
+                            <i className="fas fa-table mr-2"></i>결과 확인
+                        </button>
+                    </div>
+
+                    {/* Status Message */}
+                    {generationStatus && (
+                        <div className={`mb-6 p-4 rounded-lg border flex justify-between items-center ${generationStatus.includes('성공') ? 'bg-green-50 border-green-200 text-green-800' : 'bg-orange-50 border-orange-200 text-orange-800'}`}>
+                            <div>
+                                <span className="font-bold mr-2">상태:</span>
+                                {generationStatus}
+                            </div>
+                            <div className="text-xs text-gray-500 hidden md:block">
+                                {logMessage.map((msg, i) => <div key={i}>{msg}</div>)}
                             </div>
                         </div>
+                    )}
 
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin">
-                            {/* 학급 설정 */}
-                            <section className="bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm">
-                                <label className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1 mb-1.5 px-0.5"><Icons.Users /> 학급 수 설정</label>
-                                <div className="grid grid-cols-2 gap-1">
-                                    {grades.map(g => (
-                                        <div key={g.id} className={`flex flex-col p-1 rounded-md border ${selectedGradeId === g.id && viewMode === 'single' ? 'bg-blue-50 border-blue-400' : 'bg-white border-slate-100'}`}>
-                                            <button onClick={() => { setSelectedGradeId(g.id); setViewMode('single'); }} className="text-[8px] font-black text-slate-700 truncate leading-tight">{g.id}학년</button>
-                                            <input type="number" value={g.classCount} onChange={(e) => updateClassCount(g.id, e.target.value)} className="w-full border-none bg-transparent text-[10px] text-center font-bold focus:outline-none p-0" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            {/* 교사 등록 폼 */}
-                            <section className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-                                <label className="text-[9px] font-black text-blue-600 uppercase border-b border-blue-50 pb-1 flex items-center gap-1 mb-1.5 px-0.5"><Icons.UserPlus /> 신규 등록</label>
-                                <div className="space-y-1.5 text-xs">
-                                    <div className="flex gap-1">
-                                        <input placeholder="성함(학년교과)" className="flex-1 text-[10px] p-1.5 border rounded-lg outline-none focus:ring-1 focus:ring-blue-500" value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} />
-                                        <button onClick={addTeacher} className="px-3 bg-blue-600 text-white text-[10px] font-black rounded-lg hover:bg-blue-700 active:scale-95 shadow-sm transition-all">등록</button>
+                    {/* Content */}
+                    {activeTab === 'settings' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
+                            <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
+                                <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs">1</span>
+                                학년별/요일별 수업 가능 교시 (Max Period)
+                            </h2>
+                            <div className="mb-8 overflow-x-auto">
+                                <div className="min-w-[500px]">
+                                    <div className="grid grid-cols-6 gap-2 text-center text-sm font-bold text-gray-500 mb-2 bg-gray-50 p-2 rounded">
+                                        <div>학년</div>
+                                        {DAYS.map(d => <div key={d}>{d}요일</div>)}
                                     </div>
-                                    
-                                    <div className="grid grid-cols-10 gap-0.5 p-1 bg-slate-50 rounded-lg">
-                                        {COLOR_PALETTES.map((p, idx) => (
-                                            <button 
-                                                key={idx} 
-                                                onClick={() => setNewTeacher({...newTeacher, colorIdx: idx})}
-                                                className={`w-full aspect-square rounded-full border ${p.dot} ${newTeacher.colorIdx === idx ? 'border-slate-900 scale-110 shadow-sm' : 'border-white'} transition-all`}
-                                            />
-                                        ))}
-                                    </div>
-
-                                    <div className="bg-slate-50 p-1 rounded-lg space-y-1">
-                                        <div className="flex justify-between items-center text-[8px] font-bold text-slate-400 px-1 uppercase tracking-tighter"><span>과목 / 목표 총 시수</span><button onClick={addSubjectInput} className="text-blue-500 hover:scale-110 transition-all"><Icons.Plus /></button></div>
-                                        {newTeacher.subjectConfigs.map((config, idx) => (
-                                            <div key={idx} className="flex items-center gap-1">
-                                                <input placeholder="과목" className="w-[120px] text-[9px] p-1 border rounded bg-white outline-none" value={config.name} onChange={e => updateSubjectInput(idx, 'name', e.target.value)} />
-                                                <input type="number" className="flex-1 min-w-[32px] text-[9px] p-1 border rounded text-center bg-white outline-none font-bold" value={config.hoursPerClass} onChange={e => updateSubjectInput(idx, 'hoursPerClass', e.target.value)} />
-                                                <button onClick={() => removeSubjectInput(idx)} className="text-slate-300 hover:text-red-500 transition-colors p-0.5"><Icons.Trash2 /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* 교사 목록 */}
-                            <section className="space-y-1.5 pb-10 text-xs">
-                                <label className="text-[9px] font-black text-slate-500 uppercase px-0.5 flex items-center gap-1 mb-1"><Icons.LayoutGrid /> 교사 목록 (배정 현황)</label>
-                                {teachers.map(t => {
-                                    const isActive = activeTeacher?.id === t.id;
-                                    const isConfirming = deleteConfirmId === t.id;
-                                    const isAllComplete = t.subjectConfigs.every(config => 
-                                        assignments.filter(a => a.teacherId === t.id && a.subjectName === config.name).length >= config.hoursPerClass
-                                    );
-
-                                    return (
-                                        <div key={t.id} className={`relative p-2 rounded-lg border transition-all ${isActive ? 'bg-white shadow-lg ring-1 ring-blue-500 z-10' : 'bg-white border-slate-100 hover:border-slate-200'} ${isAllComplete ? 'bg-emerald-50/30' : ''}`}>
-                                            <div onClick={() => { if(isActive) { setActiveTeacher(null); setActiveSubjectName(""); } else { setActiveTeacher(t); setActiveSubjectName(t.subjectConfigs[0]?.name || ""); } }} className="cursor-pointer pr-6">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <div className="flex items-center gap-1.5 overflow-hidden">
-                                                        <div className={`w-2 h-2 rounded-full ${t.dot} shadow-sm shrink-0`}></div>
-                                                        <h3 className="text-[10px] font-black text-slate-800 truncate leading-none">{t.name}</h3>
-                                                    </div>
-                                                    {isAllComplete && <span className="text-[8px] bg-emerald-500 text-white px-1 py-0.5 rounded font-black uppercase leading-none scale-90">Complete</span>}
+                                    {[3, 4, 5, 6].map(g => (
+                                        <div key={g} className="grid grid-cols-6 gap-2 mb-2 items-center p-2 hover:bg-gray-50 rounded transition-colors">
+                                            <div className="font-bold text-center text-gray-700 bg-gray-100 rounded py-1">{g}학년</div>
+                                            {DAYS.map((d, dIdx) => (
+                                                <div key={dIdx} className="flex justify-center">
+                                                    <input 
+                                                        type="number" 
+                                                        value={gradeLimits[g][dIdx]}
+                                                        onChange={(e) => handleGradeLimitChange(g, dIdx, e.target.value)}
+                                                        className="edit-input w-full text-center font-medium"
+                                                    />
                                                 </div>
-                                                <div className="space-y-1">
-                                                    {t.subjectConfigs.map((config, sIdx) => {
-                                                        const assigned = assignments.filter(a => a.teacherId === t.id && a.subjectName === config.name).length;
-                                                        const required = config.hoursPerClass;
-                                                        const isSubActive = isActive && activeSubjectName === config.name;
-                                                        const isComplete = assigned >= required;
-
-                                                        return (
-                                                            <div key={sIdx} onClick={(e) => { if(isActive) { e.stopPropagation(); setActiveSubjectName(config.name); } }} className={`px-2 py-1 rounded border transition-all ${isSubActive ? 'bg-blue-600 text-white border-transparent' : (isComplete ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-slate-50 text-slate-500 border-slate-100')}`}>
-                                                                <div className="flex justify-between items-center text-[9px] font-black mb-0.5 uppercase tracking-tighter leading-none">
-                                                                    <div className="flex items-center gap-1 truncate pr-1">
-                                                                        {isComplete && <Icons.Check />}
-                                                                        <span className="truncate leading-none">{config.name}</span>
-                                                                    </div>
-                                                                    <span className="leading-none whitespace-nowrap">{assigned}/{required}h</span>
-                                                                </div>
-                                                                {required > 0 && (
-                                                                    <div className={`w-full h-0.5 rounded-full overflow-hidden mt-1 ${isSubActive ? 'bg-blue-400' : (isComplete ? 'bg-emerald-200' : 'bg-slate-200')}`}>
-                                                                        <div className={`h-full transition-all duration-700 ${isSubActive ? 'bg-white' : (isComplete ? 'bg-emerald-500' : t.stripe)}`} style={{ width: `${Math.min(100, (assigned / required) * 100)}%` }}></div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                            <div className="absolute top-2 right-2">
-                                                {!isConfirming ? (
-                                                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(t.id); }} className="p-1 text-slate-300 hover:text-red-500 transition-all"><Icons.Trash2 /></button>
-                                                ) : (
-                                                    <div className="flex gap-1 animate-in fade-in slide-in-from-right-1">
-                                                        <button onClick={(e) => { e.stopPropagation(); removeTeacher(t.id); }} className="p-1 bg-red-500 text-white rounded shadow-sm hover:bg-red-600 transition-colors"><Icons.Check /></button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="p-1 bg-slate-200 text-slate-600 rounded shadow-sm hover:bg-slate-300 transition-colors"><Icons.X /></button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {teachers.length === 0 && (
-                                    <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed px-4">
-                                            상단 '신규 등록'에서<br/>교사를 먼저 추가하세요.
-                                        </p>
-                                    </div>
-                                )}
-                            </section>
-                        </div>
-                    </aside>
-
-                    <main className="flex-1 flex flex-col overflow-hidden bg-white">
-                        <header className="h-10 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0">
-                            <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest leading-none">
-                                <Icons.LayoutGrid /> {viewMode === 'single' ? `${selectedGradeId}학년 시간표` : '통합 시간표 사전 배치판'}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {activeTeacher && (
-                                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-black shadow-md border animate-pulse ${
-                                        (assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length >= (activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0))
-                                        ? 'bg-emerald-600 text-white border-emerald-500' 
-                                        : 'bg-blue-600 text-white border-white/20'
-                                    }`}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-sm"></div>
-                                        {activeTeacher.name} {activeSubjectName} 배치 중
-                                        {(assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length >= (activeTeacher.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0)) && " (완료)"}
-                                    </div>
-                                )}
-                                <div className="flex gap-1 ml-2 border-l border-slate-200 pl-2">
-                                    <button onClick={exportToCSV} className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white rounded text-[9px] font-black shadow-sm active:scale-95 transition-all leading-none"><Icons.FileSpreadsheet /> EXCEL</button>
-                                </div>
-                            </div>
-                        </header>
-
-                        <div className="flex-1 timetable-container">
-                            <table className="w-full h-full table-fixed">
-                                <thead>
-                                    <tr className="bg-slate-100 h-10">
-                                        <th className="col-fixed border-b border-r border-slate-200 text-[8px] font-black text-slate-400 uppercase sticky left-0 z-30 bg-slate-100 leading-none">요일</th>
-                                        <th className="col-fixed border-b border-r border-slate-200 text-[8px] font-black text-slate-400 uppercase sticky left-10 z-30 bg-slate-100 text-center leading-none">교시</th>
-                                        {visibleColumns.map(gCol => (
-                                            <th key={gCol.gradeId} colSpan={gCol.classes.length} className="border-b border-r-2 border-slate-300 text-center px-0.5">
-                                                <div className="flex items-center justify-center gap-0.5 overflow-hidden">
-                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${gCol.color}`}></div>
-                                                    <span className="text-[9px] font-black text-slate-800 uppercase truncate tracking-tighter leading-none">{gCol.gradeName}</span>
-                                                </div>
-                                            </th>
-                                        ))}
-                                    </tr>
-                                    <tr className="bg-white h-5">
-                                        <th className="sticky left-0 z-30 bg-white border-b border-r border-slate-200"></th>
-                                        <th className="sticky left-10 z-30 bg-white border-b border-r border-slate-200"></th>
-                                        {visibleColumns.map(gCol => gCol.classes.map((cNum, idx) => (
-                                            <th key={`${gCol.gradeId}-${cNum}`} className={`border-b text-[7px] font-black text-slate-400 leading-none ${idx === gCol.classes.length - 1 ? 'border-r-2 border-slate-300' : 'border-r border-slate-200'}`}>{cNum}반</th>
-                                        )))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {DAYS.map((day) => (
-                                        <React.Fragment key={day}>
-                                            {PERIODS.map((period, pIdx) => (
-                                                <tr key={`${day}-${period}`} className="group transition-colors border-b border-slate-100">
-                                                    {pIdx === 0 && <td rowSpan={6} className="sticky left-0 z-10 bg-slate-50 border-r border-slate-200 text-center font-black text-slate-600 text-[8px] uppercase tracking-tighter shadow-sm leading-none"><div className="writing-mode-vertical py-1 mx-auto leading-none">{day}</div></td>}
-                                                    <td className="sticky left-10 z-10 bg-slate-50 border-r border-slate-200 text-center text-[9px] font-black text-slate-400 italic bg-slate-50/50 shadow-sm leading-none">{period}</td>
-                                                    {visibleColumns.map(gCol => gCol.classes.map((classNum, idx) => {
-                                                        const as = getAssignment(gCol.gradeId, classNum, day, period);
-                                                        const t = as ? teachers.find(tr => tr.id === as.teacherId) : null;
-                                                        const conflicts = activeTeacher && !as ? getConflicts(activeTeacher.id, gCol.gradeId, classNum, day, period) : [];
-                                                        const isOccupiedByOther = as && activeTeacher && as.teacherId !== activeTeacher.id;
-                                                        
-                                                        const activeSubjectReq = activeTeacher?.subjectConfigs.find(s => s.name === activeSubjectName)?.hoursPerClass || 0;
-                                                        const activeSubjectAssigned = activeTeacher ? assignments.filter(a => a.teacherId === activeTeacher.id && a.subjectName === activeSubjectName).length : 0;
-                                                        const isSubjectFull = activeTeacher && activeSubjectAssigned >= activeSubjectReq;
-
-                                                        return (
-                                                            <td key={`${gCol.gradeId}-${classNum}`} onClick={() => handleCellClick(gCol.gradeId, classNum, day, period)} className={`p-px relative group/cell transition-all ${idx === gCol.classes.length - 1 ? 'border-r-2 border-slate-300' : 'border-r border-slate-100'} ${isOccupiedByOther ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${conflicts.length > 0 ? 'bg-red-50' : 'hover:bg-blue-50/50'}`}>
-                                                                {as ? (
-                                                                    <div className={`h-full w-full rounded-sm border-l shadow-sm flex flex-col justify-center overflow-hidden leading-tight ${isOccupiedByOther ? 'grayscale opacity-30 scale-95' : 'group-hover/cell:scale-105 group-hover/cell:shadow-md'} ${t?.color || 'bg-slate-100 border-slate-300'}`}>
-                                                                        <div className="flex justify-between items-center px-0.5 overflow-hidden">
-                                                                            <span className="text-[6px] font-black opacity-80 uppercase tracking-tighter truncate leading-none">{as.subjectName}</span>
-                                                                            {!isOccupiedByOther && activeTeacher ? <div className="text-slate-400 shrink-0 hover:text-red-500 transition-colors"><Icons.Trash2 /></div> : (isOccupiedByOther && <div className="shrink-0 scale-75"><Icons.Lock /></div>)}
-                                                                        </div>
-                                                                        <div className="font-black text-slate-900 text-[8px] px-0.5 truncate leading-none mt-0.5">{t?.name}</div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="h-full w-full flex items-center justify-center leading-none">
-                                                                        {activeTeacher && conflicts.length === 0 && !isSubjectFull && <Icons.Plus />}
-                                                                        {conflicts.length > 0 && <Icons.AlertCircle />}
-                                                                        {isSubjectFull && activeTeacher && !as && <div className="text-[6px] font-black text-slate-300 scale-75 leading-none">FULL</div>}
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                        );
-                                                    }))}
-                                                </tr>
                                             ))}
-                                            <tr className="h-0.5 bg-slate-400 border-b border-slate-400"><td colSpan={visibleColumns.reduce((acc, g) => acc + g.classes.length, 2)}></td></tr>
-                                        </React.Fragment>
+                                        </div>
                                     ))}
-                                </tbody>
-                            </table>
+                                </div>
+                            </div>
+
+                            <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
+                                <span className="bg-red-100 text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-xs">2</span>
+                                전담 수업 배정 금지 시간 (Block Time)
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-4 bg-gray-50 p-3 rounded">
+                                <i className="fas fa-info-circle mr-2 text-blue-500"></i>
+                                해당 학년의 특정 요일/교시를 클릭하여 <span className="text-red-500 font-bold">빨간색(금지)</span>으로 설정하세요. 
+                                (예: 동아리, 학교 행사 등)
+                            </p>
+                            
+                            <div className="flex gap-2 mb-4">
+                                {[3, 4, 5, 6].map(g => (
+                                    <button 
+                                        key={g}
+                                        onClick={() => setActiveBlockGrade(g)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeBlockGrade === g ? 'bg-gray-800 text-white shadow-md' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                    >
+                                        {g}학년 설정
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="border rounded-lg overflow-hidden max-w-2xl shadow-sm">
+                                <div className="grid grid-cols-6 border-b text-center bg-gray-50 text-sm font-bold text-gray-600 divide-x">
+                                    <div className="py-3">교시</div>
+                                    {DAYS.map(d => <div key={d} className="py-3">{d}</div>)}
+                                </div>
+                                <div className="divide-y">
+                                    {PERIODS.map(p => (
+                                        <div key={p} className="grid grid-cols-6 divide-x h-12">
+                                            <div className="flex items-center justify-center bg-gray-50 text-sm font-bold text-gray-500">
+                                                {p}교시
+                                            </div>
+                                            {DAYS.map((d, dIdx) => {
+                                                const isBlocked = blockedSlots[`${activeBlockGrade}-${dIdx}-${p}`];
+                                                const isOverLimit = p > gradeLimits[activeBlockGrade][dIdx]; 
+                                                
+                                                if (isOverLimit) {
+                                                    return (
+                                                        <div key={dIdx} className="bg-gray-100 flex items-center justify-center text-xs text-gray-400 cursor-not-allowed" title="수업 시수 초과">
+                                                            <i className="fas fa-times"></i>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <div 
+                                                        key={dIdx} 
+                                                        onClick={() => toggleBlockedSlot(activeBlockGrade, dIdx, p)}
+                                                        className={`block-grid-cell flex items-center justify-center text-sm font-bold ${isBlocked ? 'blocked' : 'bg-white'}`}
+                                                    >
+                                                        {isBlocked ? '금지' : ''}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                    </main>
+                    )}
+
+                    {activeTab === 'input' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-lg font-bold text-gray-800">교사 정보 입력</h2>
+                                <button onClick={addTeacher} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow transition-colors text-sm font-bold">
+                                    <i className="fas fa-plus mr-2"></i>교사 추가
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-gray-500 border-collapse">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                                        <tr>
+                                            <th className="px-3 py-3 w-32">교사명</th>
+                                            <th className="px-3 py-3 w-32">과목</th>
+                                            <th className="px-3 py-3 w-20">학년</th>
+                                            <th className="px-3 py-3">담당 반 (쉼표 구분)</th>
+                                            <th className="px-3 py-3 w-24">반당 시수</th>
+                                            <th className="px-3 py-3 w-32">특별실</th>
+                                            <th className="px-3 py-3 w-24">색상</th>
+                                            <th className="px-3 py-3 w-16 text-center">삭제</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {teachers.map((t, idx) => (
+                                            <tr key={t.id} className="border-b hover:bg-blue-50 transition-colors">
+                                                <td className="px-2 py-2">
+                                                    <input className="edit-input" value={t.name} onChange={(e) => handleTeacherChange(t.id, 'name', e.target.value)} placeholder="예: 홍길동" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input className="edit-input" value={t.subject} onChange={(e) => handleTeacherChange(t.id, 'subject', e.target.value)} placeholder="예: 과학" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input type="number" className="edit-input" value={t.grade} onChange={(e) => handleTeacherChange(t.id, 'grade', e.target.value)} placeholder="6" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input className="edit-input" value={t.classes} onChange={(e) => handleTeacherChange(t.id, 'classes', e.target.value)} placeholder="1, 2, 3" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input type="number" className="edit-input" value={t.hoursPerClass} onChange={(e) => handleTeacherChange(t.id, 'hoursPerClass', e.target.value)} placeholder="3" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <input className="edit-input" value={t.room} onChange={(e) => handleTeacherChange(t.id, 'room', e.target.value)} placeholder="과학실1" />
+                                                </td>
+                                                <td className="px-2 py-2">
+                                                    <select className={`edit-input cursor-pointer font-bold ${t.color}`} value={t.color} onChange={(e) => handleTeacherChange(t.id, 'color', e.target.value)}>
+                                                        {COLOR_OPTIONS.map(opt => <option key={opt.value} value={opt.value} className={opt.value}>{opt.label}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td className="px-2 py-2 text-center">
+                                                    <button onClick={() => removeTeacher(t.id)} className="text-red-400 hover:text-red-600 transition-colors"><i className="fas fa-trash-alt"></i></button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="p-4 mt-4 bg-blue-50 text-center text-sm text-blue-700 rounded-lg border border-blue-100">
+                                <i className="fas fa-lightbulb mr-2"></i>
+                                <strong>팁:</strong> '과학'이나 '실과'처럼 특별실을 사용하는 과목을 먼저 입력하면 배정이 더 원활합니다.
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'result' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="flex gap-4 items-center">
+                                    <span className="font-bold text-gray-700">보기 모드:</span>
+                                    <div className="flex bg-gray-100 rounded-lg p-1">
+                                        <button className={`px-4 py-2 rounded-md text-sm transition-all ${viewMode === 'teacher' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setViewMode('teacher')}>교사별</button>
+                                        <button className={`px-4 py-2 rounded-md text-sm transition-all ${viewMode === 'class' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setViewMode('class')}>학급별</button>
+                                    </div>
+                                </div>
+                                <button onClick={() => window.print()} className="text-gray-500 hover:text-gray-800 text-sm">
+                                    <i className="fas fa-print mr-1"></i> 인쇄하기
+                                </button>
+                            </div>
+
+                            {uniqueTeachers.length === 0 ? (
+                                <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                                    <div className="text-4xl mb-4">📝</div>
+                                    <p className="mb-2 text-lg font-bold text-gray-700">아직 생성된 시간표가 없습니다.</p>
+                                    <p className="text-sm text-gray-500">[교사 입력] 탭에서 정보를 입력하고 상단의 [시간표 생성하기] 버튼을 눌러주세요.</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-10">
+                                    {(viewMode === 'teacher' ? uniqueTeachers : classList).map(target => {
+                                        const targetName = viewMode === 'teacher' ? target.id : target; // teacher object or class string
+                                        const displayName = viewMode === 'teacher' ? `${target.name} 선생님 (${target.subject})` : `${target}반`;
+                                        
+                                        return (
+                                            <div key={viewMode === 'teacher' ? target.id : target} className="border rounded-xl overflow-hidden shadow-sm break-inside-avoid">
+                                                <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-3 font-bold text-gray-700 border-b flex justify-between items-center">
+                                                    <span className="flex items-center gap-2">
+                                                        <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
+                                                        {displayName}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-6 border-b text-center bg-gray-50 text-xs font-bold text-gray-500 divide-x">
+                                                    <div className="py-2">교시</div>
+                                                    {DAYS.map(d => <div key={d} className="py-2">{d}</div>)}
+                                                </div>
+                                                <div className="divide-y">
+                                                    {PERIODS.map(p => (
+                                                        <div key={p} className="grid grid-cols-6 divide-x h-20">
+                                                            <div className="flex items-center justify-center bg-gray-50 text-xs font-bold text-gray-400 border-r">{p}교시</div>
+                                                            {DAYS.map((d, dIdx) => (
+                                                                <div key={dIdx} className="p-1 relative">
+                                                                    {getScheduleContent(dIdx, p, viewMode, targetName)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             );
-        };
+        }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
